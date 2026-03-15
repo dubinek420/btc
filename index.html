@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC Signal Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#000;color:#fff;font-family:-apple-system,'Helvetica Neue',sans-serif;height:100%;overflow:hidden}
+.app{display:grid;grid-template-rows:42px 78px 26px 1fr 20px;height:100vh;width:100vw}
+
+/* TOP */
+.top{display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#060606;border-bottom:1px solid #1a1a1a}
+.logo{font-size:12px;font-weight:700;color:#ff9500;letter-spacing:-.3px}
+.pricewrap{display:flex;align-items:baseline;gap:6px}
+.price{font-size:24px;font-weight:300;letter-spacing:-1.5px;font-variant-numeric:tabular-nums;transition:color .1s}
+.price.up{color:#30d158}.price.dn{color:#ff453a}
+.chg{font-size:11px;padding:2px 8px;border-radius:99px}
+.chg.up{background:rgba(48,209,88,.14);color:#30d158}.chg.dn{background:rgba(255,69,58,.14);color:#ff453a}
+.topr{display:flex;align-items:center;gap:10px}
+.dot{width:6px;height:6px;border-radius:50%;background:#2a2a2a}
+.dot.on{background:#30d158;animation:pulse 1.5s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(48,209,88,.5)}70%{box-shadow:0 0 0 5px rgba(48,209,88,0)}100%{box-shadow:0 0 0 0 rgba(48,209,88,0)}}
+.cdt{font-size:10px;color:#444;min-width:20px}
+.rbtn{background:none;border:1px solid #222;color:#555;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:inherit}
+.rbtn:hover{background:#111}
+
+/* SIGNAL */
+.sig{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #1a1a1a;transition:background .3s;position:relative}
+.sig.bull{background:rgba(48,209,88,.07)}.sig.bear{background:rgba(255,69,58,.07)}.sig.wait{background:#050505}
+.spill{padding:9px 16px;border-radius:10px;font-size:20px;font-weight:700;border:1.5px solid;white-space:nowrap;flex-shrink:0;line-height:1;letter-spacing:-.5px}
+.spill.bull{background:rgba(48,209,88,.12);border-color:rgba(48,209,88,.4);color:#30d158}
+.spill.bear{background:rgba(255,69,58,.12);border-color:rgba(255,69,58,.4);color:#ff453a}
+.spill.wait{background:#111;border-color:#2a2a2a;color:#555}
+.sdet{flex:1;min-width:0}
+.sact{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sact.bull{color:#30d158}.sact.bear{color:#ff453a}.sact.wait{color:#555}
+.ssub{font-size:10px;color:#444;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sright{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.cbar{width:100px;height:3px;background:#1a1a1a;border-radius:99px;overflow:hidden}
+.cfill{height:100%;border-radius:99px;transition:width .5s;background:#333}
+.bull .cfill{background:#30d158}.bear .cfill{background:#ff453a}
+.cmeta{font-size:9px;color:#444;font-variant-numeric:tabular-nums}
+.uts{font-size:9px;color:#222}
+
+/* PM BAR */
+.pmbar{display:flex;height:26px;border-bottom:1px solid #1a1a1a;position:relative;overflow:hidden}
+.pmup{display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;font-weight:700;color:#30d158;background:rgba(48,209,88,.07);border-right:1px solid rgba(48,209,88,.1);transition:width .7s;white-space:nowrap;overflow:hidden}
+.pmdn{display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;font-weight:700;color:#ff453a;background:rgba(255,69,58,.07);transition:width .7s;white-space:nowrap;overflow:hidden}
+.otag{font-size:8px;opacity:.5;font-weight:400}
+.pmbdg{font-size:8px;padding:1px 4px;border-radius:2px}
+.pmbdg.live{background:rgba(48,209,88,.2);color:#30d158}
+.pmbdg.est{background:rgba(255,214,10,.1);color:#ffd60a}
+.t10alert{display:none;position:absolute;inset:0;background:rgba(255,214,10,.15);align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#ffd60a;animation:blink .5s infinite;z-index:3}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* CONTENT */
+.content{display:grid;grid-template-columns:1fr 195px 230px;gap:1px;background:#111;overflow:hidden;min-height:0}
+.col{display:flex;flex-direction:column;gap:1px;background:#111;overflow:hidden;min-height:0}
+.panel{background:#080808;padding:9px 12px;flex-shrink:0;overflow:hidden}
+.panel.grow{flex:1;min-height:0}
+.ptitle{font-size:8px;color:#2a2a2a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.pbdg{font-size:8px;background:#111;color:#444;padding:1px 5px;border-radius:99px}
+.pbdg.on{background:rgba(48,209,88,.1);color:#30d158}
+.pbdg.warn{background:rgba(255,214,10,.1);color:#ffd60a}
+
+/* CHART */
+.chartarea{flex:1;min-height:0;position:relative}
+.chartarea canvas{position:absolute;inset:0}
+.tfrow{display:flex;gap:2px}
+.tfb{background:#111;border:none;color:#444;border-radius:3px;padding:2px 7px;cursor:pointer;font-size:8px;font-family:inherit;transition:.1s}
+.tfb.on{background:#0a84ff;color:#fff}
+
+/* INDICATORS */
+.indgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#111;flex-shrink:0}
+.ic{background:#0a0a0a;padding:8px 10px}
+.icl{font-size:8px;color:#2a2a2a;margin-bottom:4px}
+.icv{font-size:16px;font-weight:300;font-variant-numeric:tabular-nums;line-height:1}
+.icv.bull{color:#30d158}.icv.bear{color:#ff453a}.icv.warn{color:#ffd60a}.icv.neut{color:#444}
+.icbar{height:2px;background:#141414;border-radius:99px;margin-top:4px;overflow:hidden}
+.icfill{height:100%;border-radius:99px;transition:width .4s;background:#2a2a2a}
+.ic.bull .icfill{background:#30d158}.ic.bear .icfill{background:#ff453a}.ic.warn .icfill{background:#ffd60a}
+.icsub{font-size:8px;color:#2a2a2a;margin-top:2px}
+
+/* PM PANEL */
+.pmdet{background:#080808;padding:9px 12px;flex-shrink:0}
+.pmrow{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.pmlbl{font-size:9px;font-weight:700;width:26px;flex-shrink:0}
+.pmlbl.u{color:#30d158}.pmlbl.d{color:#ff453a}
+.pmtrk{flex:1;height:12px;background:#141414;border-radius:2px;overflow:hidden}
+.pmfill{height:100%;display:flex;align-items:center;padding-left:4px;font-size:8px;font-weight:700;transition:width .7s;border-radius:2px}
+.pmfill.u{background:rgba(48,209,88,.2);color:#30d158}.pmfill.d{background:rgba(255,69,58,.2);color:#ff453a}
+.pmprice{font-size:9px;width:32px;text-align:right;color:#555;flex-shrink:0;font-variant-numeric:tabular-nums}
+.pmtimer{font-size:12px;font-weight:500;color:#ffd60a;text-align:center;margin-top:6px;font-variant-numeric:tabular-nums}
+.pmdelta{font-size:10px;text-align:center;margin-top:3px;font-variant-numeric:tabular-nums}
+.pmsrc{font-size:8px;color:#2a2a2a;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* CVD */
+.cvdnum{font-size:22px;font-weight:300;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1}
+.cvdnum.bull{color:#30d158}.cvdnum.bear{color:#ff453a}
+.flowbar{height:5px;background:#141414;border-radius:99px;overflow:hidden;margin:7px 0;position:relative}
+.fb{position:absolute;left:0;top:0;bottom:0;background:#30d158;border-radius:99px;transition:width .5s}
+.fs{position:absolute;right:0;top:0;bottom:0;background:#ff453a;border-radius:99px;transition:width .5s}
+.flbls{display:flex;justify-content:space-between;font-size:8px}
+.hmap{display:flex;gap:1px;height:10px;margin-top:5px}
+.hm{flex:1;border-radius:1px}
+
+/* FUNDING */
+.fundnum{font-size:20px;font-weight:300;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.fundnum.bull{color:#30d158}.fundnum.bear{color:#ff453a}.fundnum.neut{color:#ffd60a}
+.fundrow{display:flex;justify-content:space-between;padding:3px 0;font-size:9px;border-bottom:1px solid #0d0d0d}
+.fundrow:last-child{border-bottom:none}
+.fk{color:#2a2a2a}.fv{color:#555;font-variant-numeric:tabular-nums}
+
+/* OB */
+.ob2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.obhead{font-size:8px;margin-bottom:3px}
+.obhead.b{color:#30d158}.obhead.a{color:#ff453a;text-align:right}
+.obrow{display:flex;justify-content:space-between;padding:2px 4px;font-size:9px;position:relative;overflow:hidden;margin-bottom:1px;border-radius:2px;font-variant-numeric:tabular-nums}
+.obbg{position:absolute;top:0;bottom:0;z-index:0;border-radius:2px}
+.obrow.bid .obbg{right:0;background:rgba(48,209,88,.07)}.obrow.ask .obbg{left:0;background:rgba(255,69,58,.07)}
+.obp,.obq{position:relative;z-index:1}
+.obrow.bid .obp{color:#30d158}.obrow.ask .obp{color:#ff453a}.obq{color:#2a2a2a;font-size:8px}
+.obspread{text-align:center;padding:3px;font-size:8px;color:#333;border-top:1px solid #0d0d0d;margin-top:3px}
+.obspread b{color:#ffd60a}
+
+/* AI */
+.airow{display:flex;gap:6px;padding:4px 0;border-bottom:1px solid #0c0c0c;font-size:9px;line-height:1.5}
+.airow:last-child{border-bottom:none}
+.aiico{flex-shrink:0;width:14px;font-size:9px;color:#444}
+.aitxt{color:#555;flex:1}.aitxt b{color:#bbb;font-weight:500}
+
+/* TRADES */
+.trrow{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #0c0c0c;font-size:9px;font-variant-numeric:tabular-nums}
+.trrow:last-child{border-bottom:none}
+.trrow.new{animation:trfade .25s}
+@keyframes trfade{from{background:rgba(255,255,255,.06)}to{background:transparent}}
+.trp{font-weight:600}.trp.buy{color:#30d158}.trp.sell{color:#ff453a}
+.trq{color:#3a3a3a}.trt{color:#222}
+.trside{font-size:8px;padding:1px 3px;border-radius:2px}
+.trside.buy{background:rgba(48,209,88,.1);color:#30d158}.trside.sell{background:rgba(255,69,58,.1);color:#ff453a}
+
+/* BOTTOM */
+.bot{display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#040404;border-top:1px solid #0d0d0d;font-size:8px;color:#222}
+.botgreen{color:#30d158}
+
+/* STATUS OVERLAY — shows loading status */
+#statusOverlay{position:fixed;bottom:30px;right:14px;background:#111;border:1px solid #222;border-radius:8px;padding:8px 12px;font-size:10px;color:#555;z-index:100;max-width:260px;display:none}
+#statusOverlay.show{display:block}
+.stline{padding:2px 0;display:flex;align-items:center;gap:6px}
+.stline .ok{color:#30d158}.stline .err{color:#ff453a}.stline .wait{color:#ffd60a}
+</style>
+</head>
+<body>
+<div id="statusOverlay">
+  <div style="font-size:9px;color:#333;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Stav připojení</div>
+  <div class="stline" id="st-binance"><span class="wait">●</span> Binance REST</div>
+  <div class="stline" id="st-ws"><span class="wait">●</span> Binance WebSocket</div>
+  <div class="stline" id="st-pm"><span class="wait">●</span> Polymarket API</div>
+  <div class="stline" id="st-funding"><span class="wait">●</span> Futures Funding</div>
+  <div style="margin-top:6px;font-size:9px;color:#333;border-top:1px solid #1a1a1a;padding-top:5px" id="st-msg">Připojuji...</div>
+</div>
+
+<div class="app">
+  <div class="top">
+    <div class="logo">₿ BTC Signal Pro</div>
+    <div class="pricewrap">
+      <div class="price" id="topP">–</div>
+      <div class="chg" id="topC"></div>
+    </div>
+    <div class="topr">
+      <div class="dot" id="wsdot"></div>
+      <span class="cdt" id="cdt">15s</span>
+      <button class="rbtn" onclick="doRefresh()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="sig wait" id="sigrow">
+    <div class="spill wait" id="spill">⏸ WAIT</div>
+    <div class="sdet">
+      <div class="sact wait" id="sact">Načítám data...</div>
+      <div class="ssub" id="ssub">Score: –/20 · Confidence: –%</div>
+    </div>
+    <div class="sright">
+      <div class="cbar"><div class="cfill" id="cfill" style="width:0%"></div></div>
+      <div class="cmeta" id="cmeta">0/20</div>
+      <div class="uts" id="uts">–</div>
+    </div>
+  </div>
+
+  <div class="pmbar">
+    <div class="t10alert" id="t10">⚡ POSLEDNÍ 10 SEKUND — VSTUPUJ TEĎ!</div>
+    <div class="pmup" id="pmUp" style="width:50%">
+      <span class="otag">UP</span>
+      <span id="pmUpPct">50%</span>
+      <span id="pmUpDollar" style="font-size:9px;opacity:.55">$0.50</span>
+      <span class="pmbdg est" id="pmBdg">est.</span>
+    </div>
+    <div class="pmdn" id="pmDn" style="width:50%">
+      <span id="pmDnDollar" style="font-size:9px;opacity:.55">$0.50</span>
+      <span id="pmDnPct">50%</span>
+      <span class="otag">DOWN</span>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- COL 1: Chart + Indicators -->
+    <div class="col">
+      <div class="panel grow" style="display:flex;flex-direction:column">
+        <div class="ptitle">
+          BTC / USDT
+          <div class="tfrow">
+            <button class="tfb" onclick="setTf('1m',this)">1m</button>
+            <button class="tfb on" onclick="setTf('5m',this)">5m</button>
+            <button class="tfb" onclick="setTf('15m',this)">15m</button>
+          </div>
+        </div>
+        <div class="chartarea"><canvas id="mainChart"></canvas></div>
+      </div>
+      <div class="indgrid">
+        <div class="ic neut" id="ic0"><div class="icl">RSI 14</div><div class="icv neut" id="v0">–</div><div class="icbar"><div class="icfill" id="f0" style="width:50%"></div></div><div class="icsub" id="s0">–</div></div>
+        <div class="ic neut" id="ic1"><div class="icl">MACD hist</div><div class="icv neut" id="v1">–</div><div class="icbar"><div class="icfill" id="f1" style="width:50%"></div></div><div class="icsub" id="s1">–</div></div>
+        <div class="ic neut" id="ic2"><div class="icl">BB %B</div><div class="icv neut" id="v2">–</div><div class="icbar"><div class="icfill" id="f2" style="width:50%"></div></div><div class="icsub" id="s2">–</div></div>
+        <div class="ic neut" id="ic3"><div class="icl">StochRSI</div><div class="icv neut" id="v3">–</div><div class="icbar"><div class="icfill" id="f3" style="width:50%"></div></div><div class="icsub" id="s3">–</div></div>
+        <div class="ic neut" id="ic4"><div class="icl">VWAP Δ%</div><div class="icv neut" id="v4">–</div><div class="icbar"><div class="icfill" id="f4" style="width:50%"></div></div><div class="icsub" id="s4">–</div></div>
+        <div class="ic neut" id="ic5"><div class="icl">EMA9 Δ%</div><div class="icv neut" id="v5">–</div><div class="icbar"><div class="icfill" id="f5" style="width:50%"></div></div><div class="icsub" id="s5">–</div></div>
+      </div>
+    </div>
+
+    <!-- COL 2: Polymarket + CVD + Funding + OB -->
+    <div class="col">
+      <div class="pmdet">
+        <div class="ptitle">Polymarket BTC 5min <span class="pbdg" id="pmSrcBdg">–</span></div>
+        <div class="pmrow">
+          <div class="pmlbl u">UP</div>
+          <div class="pmtrk"><div class="pmfill u" id="pmUF" style="width:50%">50%</div></div>
+          <div class="pmprice" id="pmUPrice">$0.500</div>
+        </div>
+        <div class="pmrow">
+          <div class="pmlbl d">DOWN</div>
+          <div class="pmtrk"><div class="pmfill d" id="pmDF" style="width:50%">50%</div></div>
+          <div class="pmprice" id="pmDPrice">$0.500</div>
+        </div>
+        <div class="pmtimer" id="pmTimer">–</div>
+        <div class="pmdelta" id="pmDelta"></div>
+        <div class="pmsrc" id="pmSrc">Hledám aktivní market...</div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">CVD — buy vs sell 5min <span class="pbdg" id="cvdBdg">–</span></div>
+        <div class="cvdnum" id="cvdNum">–</div>
+        <div style="font-size:8px;color:#2a2a2a;margin-top:3px" id="cvdDesc">–</div>
+        <div class="flowbar">
+          <div class="fb" id="flowB" style="width:50%"></div>
+          <div class="fs" id="flowS" style="width:50%"></div>
+        </div>
+        <div class="flbls">
+          <span style="color:#30d158" id="cvdBuyLbl">–</span>
+          <span style="color:#ff453a" id="cvdSellLbl">–</span>
+        </div>
+        <div class="hmap" id="heatmap"></div>
+      </div>
+
+      <div class="panel">
+        <div class="ptitle">Funding rate + OI <span class="pbdg">Futures</span></div>
+        <div class="fundnum neut" id="fundNum">–</div>
+        <div style="font-size:8px;color:#2a2a2a;margin-top:2px;margin-bottom:7px" id="fundDesc">–</div>
+        <div class="fundrow"><span class="fk">Open Interest</span><span class="fv" id="fundOI">–</span></div>
+        <div class="fundrow"><span class="fk">Mark Price</span><span class="fv" id="fundMark">–</span></div>
+        <div class="fundrow"><span class="fk">Next funding</span><span class="fv" id="fundNext">–</span></div>
+      </div>
+
+      <div class="panel grow" style="overflow:hidden">
+        <div class="ptitle">Orderbook depth 15 <span class="pbdg" id="obBdg">–</span></div>
+        <div class="ob2">
+          <div><div class="obhead b">BIDS</div><div id="obBids"></div></div>
+          <div><div class="obhead a">ASKS</div><div id="obAsks"></div></div>
+        </div>
+        <div class="obspread">Spread: <b id="obSpread">–</b></div>
+      </div>
+    </div>
+
+    <!-- COL 3: AI + Trades + Latency -->
+    <div class="col">
+      <div class="panel">
+        <div class="ptitle">AI Analýza důvodů</div>
+        <div id="aiBox">
+          <div class="airow"><span class="aiico">…</span><span class="aitxt">Načítám...</span></div>
+        </div>
+      </div>
+      <div class="panel grow" style="display:flex;flex-direction:column;overflow:hidden">
+        <div class="ptitle" style="flex-shrink:0">
+          Live Trades
+          <span class="pbdg" id="trBdg">0</span>
+        </div>
+        <div id="trFeed" style="flex:1;overflow-y:auto"></div>
+      </div>
+      <div class="panel">
+        <div class="ptitle">Latence <span class="pbdg" id="latBdg">–</span></div>
+        <div style="height:28px;position:relative"><canvas id="pingChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bot">
+    <span><span class="botgreen">●</span> <span id="botStatus">Spouštím...</span></span>
+    <span id="botTime" style="font-variant-numeric:tabular-nums">–</span>
+    <span>⚠ Technická analýza — není finanční poradenství</span>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const S = {
+  price: 0, prev: 0, tf: '5m',
+  klines: [], ticker: null, ob: null,
+  trades: [], wsTrades: [],
+  fund: { r: 0, oi: 0, mark: 0, next: 0 },
+  cvd: { b: 0, s: 0, d: 0, ratio: .5, hist: [] },
+  pm: { up: 50, dn: 50, upP: .5, dnP: .5, live: false, q: '', winTs: 0, closeTs: 0 },
+  pingH: [], ws: null, wsOk: false,
+  cd: 15, cdTimer: null, mc: null, pc: null,
+  winOpenPrice: 0, lastWinTs: 0, pmLastFetch: 0, sigThrottle: false,
+};
+
+const $ = id => document.getElementById(id);
+const cl = (n, a, b) => Math.max(a, Math.min(b, n));
+const fp = (n, d = 0) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const st = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+const tsMs = () => { const d = new Date(); return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0'); };
+const clamp = cl;
+
+// ══════════════════════════════════════════════
+// STATUS OVERLAY
+// ══════════════════════════════════════════════
+const overlay = $('statusOverlay');
+let overlayTimer = null;
+
+function showStatus(msg) {
+  if (overlay) {
+    overlay.classList.add('show');
+    st('st-msg', msg);
+    clearTimeout(overlayTimer);
+    overlayTimer = setTimeout(() => overlay.classList.remove('show'), 8000);
+  }
+}
+
+function setStLine(id, ok, txt) {
+  const el = $(id);
+  if (!el) return;
+  const dot = ok === true ? '<span class="ok">●</span>' : ok === false ? '<span class="err">●</span>' : '<span class="wait">●</span>';
+  el.innerHTML = dot + ' ' + txt;
+}
+
+// Show status on load
+showStatus('Připojuji na Binance a Polymarket...');
+
+// ══════════════════════════════════════════════
+// FETCH — multi-strategy, no AbortSignal
+// ══════════════════════════════════════════════
+const PROXIES = [
+  url => url,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+];
+
+async function apiFetch(url) {
+  let lastErr;
+  for (const proxy of PROXIES) {
+    try {
+      const r = await fetch(proxy(url));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+// ══════════════════════════════════════════════
+// MATH FUNCTIONS
+// ══════════════════════════════════════════════
+const ema = (a, p) => {
+  if (a.length < p) return a[a.length - 1] || 0;
+  const k = 2 / (p + 1);
+  let e = a.slice(0, p).reduce((x, y) => x + y, 0) / p;
+  for (let i = p; i < a.length; i++) e = a[i] * k + e * (1 - k);
+  return e;
+};
+
+const rsi = (c, p = 14) => {
+  if (c.length < p + 1) return 50;
+  let g = 0, l = 0;
+  for (let i = c.length - p; i < c.length; i++) {
+    const d = c[i] - c[i - 1];
+    d > 0 ? g += d : l += Math.abs(d);
+  }
+  return +(100 - 100 / (1 + (g / p) / (l / p || 1e-9))).toFixed(1);
+};
+
+const macdCalc = c => {
+  if (c.length < 30) return 0;
+  const e12 = ema(c, 12), e26 = ema(c, 26), line = e12 - e26;
+  const arr = [];
+  for (let i = 26; i <= c.length; i++) arr.push(ema(c.slice(0, i), 12) - ema(c.slice(0, i), 26));
+  return +(line - (arr.length >= 9 ? ema(arr, 9) : arr[arr.length - 1] || 0)).toFixed(2);
+};
+
+const bbPos = c => {
+  if (c.length < 20) return .5;
+  const sl = c.slice(-20), m = sl.reduce((a, b) => a + b, 0) / 20;
+  const std = Math.sqrt(sl.reduce((a, b) => a + (b - m) ** 2, 0) / 20);
+  return clamp((c[c.length - 1] - (m - 2 * std)) / (4 * std || 1), 0, 1);
+};
+
+const stochRsi = (c, rp = 14, sp = 14) => {
+  if (c.length < rp + sp + 2) return 50;
+  const arr = [];
+  for (let i = rp; i <= c.length; i++) arr.push(rsi(c.slice(0, i)));
+  const sl = arr.slice(-sp), mn = Math.min(...sl), mx = Math.max(...sl);
+  return mx === mn ? 50 : +((sl[sl.length - 1] - mn) / (mx - mn) * 100).toFixed(1);
+};
+
+const vwapCalc = (kl, n = 20) => {
+  if (!kl.length) return 0;
+  let tv = 0, v = 0;
+  kl.slice(-n).forEach(k => { const tp = (+k[2] + +k[3] + +k[4]) / 3, vol = +k[5]; tv += tp * vol; v += vol; });
+  return v ? tv / v : 0;
+};
+
+const atrCalc = (kl, p = 14) => {
+  if (kl.length < p + 1) return 0;
+  const tr = [];
+  for (let i = 1; i < kl.length; i++) {
+    const h = +kl[i][2], l = +kl[i][3], pc = +kl[i - 1][4];
+    tr.push(Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc)));
+  }
+  return tr.slice(-p).reduce((a, b) => a + b, 0) / p;
+};
+
+const obPressure = ob => {
+  if (!ob) return .5;
+  const b = ob.bids.slice(0, 20).reduce((a, b) => a + parseFloat(b[1]), 0);
+  const s = ob.asks.slice(0, 20).reduce((a, b) => a + parseFloat(b[1]), 0);
+  return +(b / (b + s)).toFixed(3);
+};
+
+// ══════════════════════════════════════════════
+// SIGNAL ENGINE — tuned for 5min Polymarket
+// ══════════════════════════════════════════════
+function computeSignal(ind) {
+  let score = 0;
+  const notes = [];
+  const { r, mh, bp, sr, ob, vd, ed, cr, fr, m5, ap, pmUp } = ind;
+
+  // RSI — weight 3, key mean-reversion
+  if (r < 22) { score += 3; notes.push({ i: '📉', t: 'RSI <b>' + r + '</b> — extrémní přeprodanost → silný bullish reverz' }); }
+  else if (r < 32) { score += 2; notes.push({ i: '📊', t: 'RSI <b>' + r + '</b> — přeprodanost, bullish bias' }); }
+  else if (r > 78) { score -= 3; notes.push({ i: '📈', t: 'RSI <b>' + r + '</b> — extrémní překoupenost → silný bearish reverz' }); }
+  else if (r > 68) { score -= 2; notes.push({ i: '📊', t: 'RSI <b>' + r + '</b> — překoupenost' }); }
+  else notes.push({ i: '➖', t: 'RSI <b>' + r + '</b> — neutrální pásmo' });
+
+  // MACD — weight 2
+  if (mh > 12) { score += 2; notes.push({ i: '⬆', t: 'MACD hist <b>+' + mh + '</b> — silné bullish momentum' }); }
+  else if (mh > 0) { score += 1; notes.push({ i: '↗', t: 'MACD hist <b>+' + mh + '</b> — mírně bullish' }); }
+  else if (mh < -12) { score -= 2; notes.push({ i: '⬇', t: 'MACD hist <b>' + mh + '</b> — silné bearish momentum' }); }
+  else { score -= 1; notes.push({ i: '↘', t: 'MACD hist <b>' + mh + '</b> — mírně bearish' }); }
+
+  // Bollinger Bands — weight 3, silný mean-reversion signál
+  if (bp < 0.06) { score += 3; notes.push({ i: '📌', t: 'BB dolní pásmo (<b>' + Math.round(bp * 100) + '%</b>) — extrémní mean-reversion signál' }); }
+  else if (bp < 0.22) { score += 1; notes.push({ i: '🔵', t: 'Blízko dolního Bollinger Bandu' }); }
+  else if (bp > 0.94) { score -= 3; notes.push({ i: '📌', t: 'BB horní pásmo (<b>' + Math.round(bp * 100) + '%</b>) — obrat dolů' }); }
+  else if (bp > 0.78) { score -= 1; notes.push({ i: '🔴', t: 'Blízko horního Bollinger Bandu' }); }
+
+  // CVD 5min — weight 3, nejpřímější signál
+  if (cr > 0.70) { score += 3; notes.push({ i: '💚', t: 'CVD 5min: <b>' + (cr * 100).toFixed(0) + '% buy</b> — dominantní nákupní tlak' }); }
+  else if (cr > 0.57) { score += 2; notes.push({ i: '🟢', t: 'CVD 5min: kupující dominují <b>' + (cr * 100).toFixed(0) + '%</b>' }); }
+  else if (cr > 0.53) score += 1;
+  else if (cr < 0.30) { score -= 3; notes.push({ i: '🔴', t: 'CVD 5min: <b>' + (cr * 100).toFixed(0) + '% buy</b> — prodejní dominance' }); }
+  else if (cr < 0.43) { score -= 2; notes.push({ i: '🔴', t: 'CVD 5min: prodejci dominují' }); }
+  else if (cr < 0.47) score -= 1;
+
+  // Orderbook pressure — weight 2
+  if (ob > 0.67) { score += 2; notes.push({ i: '📖', t: 'Orderbook: <b>' + (ob * 100).toFixed(0) + '% bid síla</b>' }); }
+  else if (ob > 0.56) score += 1;
+  else if (ob < 0.33) { score -= 2; notes.push({ i: '📖', t: 'Orderbook: <b>ask dominance</b> ' + (ob * 100).toFixed(0) + '% bid' }); }
+  else if (ob < 0.44) score -= 1;
+
+  // Funding rate — weight 2 (KONTRARIÁNSKÝ — záporný = bullish!)
+  if (fr < -0.012) { score += 2; notes.push({ i: '💰', t: 'Funding <b>' + fr.toFixed(4) + '%</b> záporný — shorts platí longs (bullish kontra)' }); }
+  else if (fr < -0.005) score += 1;
+  else if (fr > 0.025) { score -= 2; notes.push({ i: '💰', t: 'Funding <b>' + fr.toFixed(4) + '%</b> vysoký — longs platí (bearish kontra)' }); }
+  else if (fr > 0.012) score -= 1;
+
+  // Polymarket LIVE kurzy — weight 2 (pouze pokud jsou live)
+  if (S.pm.live) {
+    if (pmUp > 63) { score += 2; notes.push({ i: '🎲', t: 'Polymarket <b>LIVE: ' + pmUp + '% UP</b> — trh sází na růst' }); }
+    else if (pmUp > 55) score += 1;
+    else if (pmUp < 37) { score -= 2; notes.push({ i: '🎲', t: 'Polymarket <b>LIVE: ' + pmUp + '% UP</b> — trh sází na pokles' }); }
+    else if (pmUp < 45) score -= 1;
+  }
+
+  // VWAP delta — weight 1
+  if (vd > 0.15) { score += 1; notes.push({ i: '⚖', t: 'Cena <b>+' + vd.toFixed(2) + '%</b> nad VWAP' }); }
+  else if (vd < -0.15) { score -= 1; notes.push({ i: '⚖', t: 'Cena <b>' + vd.toFixed(2) + '%</b> pod VWAP' }); }
+
+  // StochRSI — weight 1
+  if (sr < 10) { score += 1; notes.push({ i: '🎯', t: 'StochRSI <b>' + sr + '</b> — extrémně oversold' }); }
+  else if (sr > 90) { score -= 1; notes.push({ i: '🎯', t: 'StochRSI <b>' + sr + '</b> — extrémně overbought' }); }
+
+  // 5min momentum + EMA9 delta — weight 1 each
+  if (m5 > 0.35) score += 1;
+  else if (m5 < -0.35) score -= 1;
+  if (ed > 0.15) score += 1;
+  else if (ed < -0.15) score -= 1;
+
+  // ATR warning
+  if (ap > 1.8) notes.push({ i: '⚠', t: 'ATR <b>' + ap.toFixed(2) + '%</b> — vysoká volatilita, riziko!' });
+
+  const MAX = 20;
+  const conf = Math.round(Math.abs(score) / MAX * 100);
+
+  // Vyšší threshold = méně ale přesnějších signálů
+  let sig = 'WAIT', cls = 'wait', action = 'ČEKEJ — žádný jasný signál', icon = '⏸';
+  if (score >= 7) { sig = 'UP ↑'; cls = 'bull'; action = 'VSTUP → kup UP na Polymarket ($3–8)'; icon = '🟢'; }
+  else if (score >= 5) { sig = 'UP?'; cls = 'bull'; action = 'Mírný bullish — sleduj potvrzení'; icon = '↗'; }
+  else if (score <= -7) { sig = 'DOWN ↓'; cls = 'bear'; action = 'VSTUP → kup DOWN na Polymarket ($3–8)'; icon = '🔴'; }
+  else if (score <= -5) { sig = 'DOWN?'; cls = 'bear'; action = 'Mírný bearish — sleduj potvrzení'; icon = '↘'; }
+
+  return { score, sig, cls, action, icon, conf, notes, MAX, ap };
+}
+
+// ══════════════════════════════════════════════
+// POLYMARKET
+// ══════════════════════════════════════════════
+function getPmWindow() {
+  const now = Math.floor(Date.now() / 1000);
+  const winTs = now - (now % 300);
+  return { winTs, closeTs: (winTs + 300) * 1000 };
+}
+
+async function fetchPolymarket() {
+  const { winTs, closeTs } = getPmWindow();
+  const slugs = ['btc-updown-5m-' + winTs, 'btc-updown-5m-' + (winTs - 300)];
+
+  for (const slug of slugs) {
+    try {
+      const data = await apiFetch('https://gamma-api.polymarket.com/markets?slug=' + slug + '&active=true');
+      const arr = Array.isArray(data) ? data : [];
+      const m = arr[0];
+      if (m && m.outcomePrices) {
+        let prices = m.outcomePrices;
+        if (typeof prices === 'string') prices = JSON.parse(prices);
+        if (Array.isArray(prices) && prices.length >= 2) {
+          const upP = parseFloat(prices[0]) || .5;
+          const dnP = parseFloat(prices[1]) || (1 - upP);
+          S.pm = { up: Math.round(upP * 100), dn: Math.round(dnP * 100), upP, dnP, live: true, q: m.question || slug, winTs, closeTs };
+          setStLine('st-pm', true, 'Polymarket LIVE ✓');
+          return;
+        }
+      }
+    } catch (e) {}
+  }
+  S.pm = { ...S.pm, live: false, winTs, closeTs };
+  setStLine('st-pm', null, 'Polymarket — estimace');
+}
+
+function renderPolymarket() {
+  const { up, dn, upP, dnP, live, q, closeTs } = S.pm;
+  // Top bar
+  const pu = $('pmUp'), pd = $('pmDn');
+  if (pu) { pu.style.width = up + '%'; st('pmUpPct', up + '%'); st('pmUpDollar', fp(upP, 2)); }
+  if (pd) { pd.style.width = dn + '%'; st('pmDnPct', dn + '%'); st('pmDnDollar', fp(dnP, 2)); }
+  const bdg = $('pmBdg');
+  if (bdg) { bdg.textContent = live ? 'LIVE' : 'est.'; bdg.className = 'pmbdg ' + (live ? 'live' : 'est'); }
+  // Detail panel
+  const uf = $('pmUF'), df = $('pmDF');
+  if (uf) { uf.style.width = up + '%'; uf.textContent = up + '%'; }
+  if (df) { df.style.width = dn + '%'; df.textContent = dn + '%'; }
+  st('pmUPrice', fp(upP, 3));
+  st('pmDPrice', fp(dnP, 3));
+  const sb = $('pmSrcBdg');
+  if (sb) { sb.textContent = live ? 'LIVE' : 'EST'; sb.className = 'pbdg ' + (live ? 'on' : ''); }
+  st('pmSrc', live ? q : 'Polymarket nedostupný — kurzy odhadnuty');
+  // Countdown
+  const secs = Math.max(0, Math.floor((closeTs - Date.now()) / 1000));
+  st('pmTimer', secs > 0 ? 'Zavírá za ' + Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0') : 'Nové kolo...');
+  // T-10 alert
+  const t10 = $('t10');
+  if (t10) t10.style.display = (secs > 0 && secs <= 10) ? 'flex' : 'none';
+  // Delta
+  const del = $('pmDelta');
+  if (del && S.winOpenPrice && S.price) {
+    const pct = ((S.price - S.winOpenPrice) / S.winOpenPrice * 100);
+    del.textContent = 'Δ od otevření: ' + (pct >= 0 ? '+' : '') + pct.toFixed(3) + '%';
+    del.style.color = pct >= 0 ? '#30d158' : '#ff453a';
+  }
+}
+
+// ══════════════════════════════════════════════
+// CVD
+// ══════════════════════════════════════════════
+function computeCVD() {
+  const src = S.wsTrades.length > 10 ? S.wsTrades : S.trades;
+  const b = src.filter(t => !t.m).reduce((a, t) => a + parseFloat(t.q), 0);
+  const s = src.filter(t => t.m).reduce((a, t) => a + parseFloat(t.q), 0);
+  const d = b - s, ratio = b / (b + s || 1);
+  S.cvd = { b: +b.toFixed(2), s: +s.toFixed(2), d: +d.toFixed(2), ratio: +ratio.toFixed(3), hist: S.cvd.hist || [] };
+  S.cvd.hist.push(d);
+  if (S.cvd.hist.length > 30) S.cvd.hist.shift();
+}
+
+// ══════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════
+function renderAll() {
+  // Price
+  if (S.price) {
+    const pts = S.price.toFixed(2).split('.');
+    const el = $('topP');
+    if (el) {
+      el.textContent = '$' + parseInt(pts[0]).toLocaleString('en-US') + '.' + pts[1];
+      if (S.prev) {
+        el.className = 'price ' + (S.price > S.prev ? 'up' : S.price < S.prev ? 'dn' : '');
+        setTimeout(() => { if (el) el.className = 'price'; }, 200);
+      }
+    }
+  }
+  if (S.ticker) {
+    const chg = parseFloat(S.ticker.priceChangePercent);
+    const cb = $('topC');
+    if (cb) { cb.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%'; cb.className = 'chg ' + (chg >= 0 ? 'up' : 'dn'); }
+  }
+
+  // CVD
+  computeCVD();
+  const { b, s, d, ratio, hist } = S.cvd;
+  const cvdEl = $('cvdNum');
+  if (cvdEl) { cvdEl.textContent = (d > 0 ? '+' : '') + d.toFixed(2) + ' BTC'; cvdEl.className = 'cvdnum ' + (d > 0 ? 'bull' : 'bear'); }
+  const cvdSrc = S.wsTrades.length > 10 ? 'WS live' : 'REST';
+  st('cvdBdg', cvdSrc);
+  st('cvdDesc', (d > 0 ? 'Kupující' : 'Prodejci') + ' dominují (' + cvdSrc + ')');
+  const bp2 = Math.round(ratio * 100), sp2Pct = 100 - bp2;
+  const fb = $('flowB'), fs = $('flowS');
+  if (fb) fb.style.width = bp2 + '%';
+  if (fs) fs.style.width = sp2Pct + '%';
+  st('cvdBuyLbl', 'Buy: ' + b + ' (' + bp2 + '%)');
+  st('cvdSellLbl', 'Sell: ' + s + ' (' + sp2Pct + '%)');
+  const hm = $('heatmap');
+  if (hm && hist.length) {
+    const mx = Math.max(...hist.map(Math.abs)) || 1;
+    hm.innerHTML = hist.slice(-20).map(v => {
+      const a = clamp(Math.abs(v) / mx, .1, 1);
+      return '<div class="hm" style="background:' + (v > 0 ? 'rgba(48,209,88,' + a + ')' : 'rgba(255,69,58,' + a + ')') + '"></div>';
+    }).join('');
+  }
+
+  // Funding
+  const { r: fr, oi, mark, next } = S.fund;
+  const fv = $('fundNum');
+  if (fv) { fv.textContent = (fr > 0 ? '+' : '') + fr.toFixed(4) + '%'; fv.className = 'fundnum ' + (fr > 0.01 ? 'bear' : fr < -0.004 ? 'bull' : 'neut'); }
+  st('fundDesc', fr > 0.015 ? 'Longs platí shorts (bearish kontra)' : fr < -0.004 ? 'Shorts platí longs (bullish kontra)' : 'Neutrální funding');
+  st('fundOI', Number(oi).toLocaleString('en-US', { maximumFractionDigits: 0 }) + ' BTC');
+  st('fundMark', fp(mark, 2));
+  if (next > Date.now()) {
+    const diff = next - Date.now(), h = Math.floor(diff / 3600000), mn = Math.floor((diff % 3600000) / 60000);
+    st('fundNext', h + 'h ' + mn + 'm');
+  }
+
+  // Orderbook
+  const ob = S.ob;
+  if (ob) {
+    const mxB = Math.max(...ob.bids.slice(0, 12).map(b => parseFloat(b[1])));
+    const mxA = Math.max(...ob.asks.slice(0, 12).map(a => parseFloat(a[1])));
+    const bEl = $('obBids'), aEl = $('obAsks');
+    if (bEl) bEl.innerHTML = ob.bids.slice(0, 12).map(b => {
+      const pct = Math.round(parseFloat(b[1]) / mxB * 100);
+      return '<div class="obrow bid"><div class="obbg" style="width:' + pct + '%"></div><span class="obp">' + fp(parseFloat(b[0]), 1) + '</span><span class="obq">' + parseFloat(b[1]).toFixed(3) + '</span></div>';
+    }).join('');
+    if (aEl) aEl.innerHTML = ob.asks.slice(0, 12).map(a => {
+      const pct = Math.round(parseFloat(a[1]) / mxA * 100);
+      return '<div class="obrow ask"><div class="obbg" style="width:' + pct + '%"></div><span class="obp">' + fp(parseFloat(a[0]), 1) + '</span><span class="obq">' + parseFloat(a[1]).toFixed(3) + '</span></div>';
+    }).join('');
+    if (ob.bids[0] && ob.asks[0]) {
+      const sp = (parseFloat(ob.asks[0][0]) - parseFloat(ob.bids[0][0])).toFixed(2);
+      st('obSpread', '$' + sp);
+      st('obBdg', 'spread $' + sp);
+    }
+  }
+
+  // Trades
+  const trSrc = S.wsTrades.length > 0 ? S.wsTrades : S.trades;
+  const tf = $('trFeed');
+  if (tf) {
+    if (!trSrc.length) {
+      tf.innerHTML = '<div style="font-size:9px;color:#222;padding:4px 0">Čekám na trades...</div>';
+    } else {
+      tf.innerHTML = trSrc.slice(0, 18).map((t, i) => {
+        const p = parseFloat(t.p) || 0, q = parseFloat(t.q) || 0, sell = !!t.m;
+        const ts = t.T ? new Date(t.T).toTimeString().slice(0, 8) : '–';
+        return '<div class="trrow' + (i === 0 ? ' new' : '') + '">' +
+          '<span class="trp ' + (sell ? 'sell' : 'buy') + '">' + fp(p, 2) + '</span>' +
+          '<span class="trq">' + q.toFixed(4) + '</span>' +
+          '<span class="trside ' + (sell ? 'sell' : 'buy') + '">' + (sell ? 'S' : 'B') + '</span>' +
+          '<span class="trt">' + ts + '</span></div>';
+      }).join('');
+      st('trBdg', trSrc.length + (S.wsTrades.length > 0 ? ' ●live' : ' REST'));
+    }
+  }
+
+  // Polymarket
+  renderPolymarket();
+
+  // Indicators + Signal
+  const c = S.klines.map(k => parseFloat(k[4]));
+  if (c.length < 30) { st('botStatus', 'Čekám na klines...'); return; }
+
+  const rsiV = rsi(c), mhV = macdCalc(c), bpV = bbPos(c), srV = stochRsi(c);
+  const vwV = vwapCalc(S.klines), obV = obPressure(S.ob), atrV = atrCalc(S.klines);
+  const e9 = ema(c, 9), live = S.price || c[c.length - 1];
+  const emaDiff = +(((live - e9) / e9) * 100).toFixed(3);
+  const vwapDiff = +(((live - vwV) / vwV) * 100).toFixed(3);
+  const mom5 = c.length >= 5 ? +(((live - c[c.length - 5]) / c[c.length - 5]) * 100).toFixed(3) : 0;
+  const atrPct = +(atrV / live * 100).toFixed(2);
+
+  const ind = { r: rsiV, mh: mhV, bp: bpV, sr: srV, ob: obV, vd: vwapDiff, ed: emaDiff, cr: S.cvd.ratio, fr: S.fund.r, m5: mom5, ap: atrPct, pmUp: S.pm.up };
+
+  function setIc(n, val, bw, cls, sub) {
+    const ic = $('ic' + n); if (ic) ic.className = 'ic ' + cls;
+    const ve = $('v' + n); if (ve) { ve.textContent = val; ve.className = 'icv ' + cls; }
+    const fe = $('f' + n); if (fe) fe.style.width = clamp(bw, 2, 98) + '%';
+    st('s' + n, sub);
+  }
+  setIc(0, rsiV, rsiV, rsiV > 70 ? 'bear' : rsiV < 30 ? 'bull' : rsiV > 60 ? 'warn' : 'neut', rsiV > 70 ? 'Překoupeno' : rsiV < 30 ? 'Přeprodáno' : 'Neutrální');
+  setIc(1, (mhV > 0 ? '+' : '') + mhV, 50 + clamp(mhV / 12, -1, 1) * 48, mhV > 0 ? 'bull' : 'bear', mhV > 0 ? 'Bullish' : 'Bearish');
+  setIc(2, Math.round(bpV * 100) + '%', bpV * 100, bpV < 0.2 ? 'bull' : bpV > 0.8 ? 'bear' : 'neut', bpV < 0.2 ? 'Dolní BB' : bpV > 0.8 ? 'Horní BB' : 'Střed');
+  setIc(3, srV, srV, srV < 20 ? 'bull' : srV > 80 ? 'bear' : 'neut', srV < 20 ? 'Oversold' : srV > 80 ? 'Overbought' : 'Neutrální');
+  setIc(4, (vwapDiff > 0 ? '+' : '') + vwapDiff.toFixed(2) + '%', 50 + clamp(vwapDiff * 6, -1, 1) * 48, vwapDiff > 0 ? 'bull' : 'bear', vwapDiff > 0 ? 'Nad VWAP' : 'Pod VWAP');
+  setIc(5, (emaDiff > 0 ? '+' : '') + emaDiff.toFixed(2) + '%', 50 + clamp(emaDiff * 6, -1, 1) * 48, emaDiff > 0 ? 'bull' : 'bear', emaDiff > 0 ? 'Nad EMA9' : 'Pod EMA9');
+
+  // Signal
+  const sig = computeSignal(ind);
+  const sr2 = $('sigrow'), spillEl = $('spill');
+  if (sr2) sr2.className = 'sig ' + sig.cls;
+  if (spillEl) { spillEl.className = 'spill ' + sig.cls; spillEl.textContent = sig.icon + ' ' + sig.sig; }
+  const saEl = $('sact');
+  if (saEl) { saEl.textContent = sig.action; saEl.className = 'sact ' + sig.cls; }
+  st('ssub', 'Score: ' + sig.score + '/' + sig.MAX + ' · Confidence: ' + sig.conf + '%' + (sig.ap > 1.8 ? ' · ⚠ VOLATILITA' : ''));
+  const cf = $('cfill'); if (cf) cf.style.width = sig.conf + '%';
+  st('cmeta', sig.score + '/' + sig.MAX);
+  st('uts', tsMs());
+
+  // AI reasons
+  const ai = $('aiBox');
+  if (ai) ai.innerHTML = sig.notes.slice(0, 5).map(n => '<div class="airow"><span class="aiico">' + n.i + '</span><span class="aitxt">' + n.t + '</span></div>').join('');
+
+  // Bottom
+  const dot = $('wsdot'); if (dot) dot.className = 'dot ' + (S.wsOk ? 'on' : '');
+  st('botStatus', (S.wsOk ? 'WS live ✓' : 'REST polling') + ' · ' + new Date().toTimeString().slice(0, 8) + (S.pm.live ? ' · PM LIVE' : ''));
+  st('botTime', tsMs());
+}
+
+// ══════════════════════════════════════════════
+// CHART
+// ══════════════════════════════════════════════
+function drawChart() {
+  const kl = S.klines;
+  if (!kl.length) return;
+  const labels = kl.map(k => { const d = new Date(+k[0]); return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0'); });
+  const closes = kl.map(k => parseFloat(k[4])), opens = kl.map(k => parseFloat(k[1]));
+  const cols = closes.map((c, i) => c >= opens[i] ? 'rgba(48,209,88,.8)' : 'rgba(255,69,58,.8)');
+  const mn = Math.min(...closes), mx = Math.max(...closes), pad = (mx - mn) * .06 || 30;
+  const e9 = [], e21 = [], vw = [];
+  for (let i = 0; i < closes.length; i++) {
+    e9.push(i >= 9 ? ema(closes.slice(0, i + 1), 9) : null);
+    e21.push(i >= 21 ? ema(closes.slice(0, i + 1), 21) : null);
+    vw.push(vwapCalc(kl.slice(0, i + 1)));
+  }
+  const cv = $('mainChart'); if (!cv) return;
+  if (S.mc) S.mc.destroy();
+  S.mc = new Chart(cv, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { type: 'bar', data: closes, backgroundColor: cols, borderColor: cols, borderWidth: 1, borderRadius: 2, order: 3 },
+      { type: 'line', data: e9, borderColor: '#ff9500', borderWidth: 1.5, pointRadius: 0, fill: false, tension: .3, order: 2 },
+      { type: 'line', data: e21, borderColor: '#0a84ff', borderWidth: 1.5, pointRadius: 0, fill: false, tension: .3, order: 2 },
+      { type: 'line', data: vw, borderColor: '#bf5af2', borderWidth: 1, pointRadius: 0, fill: false, tension: .3, order: 1, borderDash: [3, 3] },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fp(ctx.raw, 2) } } },
+      scales: {
+        x: { ticks: { font: { size: 8 }, color: 'rgba(255,255,255,.2)', maxTicksLimit: 8, autoSkip: true }, grid: { display: false } },
+        y: { min: mn - pad, max: mx + pad, ticks: { font: { size: 8 }, color: 'rgba(255,255,255,.2)', callback: v => '$' + v.toLocaleString('en-US', { maximumFractionDigits: 0 }) }, grid: { color: 'rgba(255,255,255,.03)' } }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// PING CHART
+// ══════════════════════════════════════════════
+async function doPing() {
+  const t = performance.now();
+  try {
+    await fetch('https://api.binance.com/api/v3/ping');
+    const l = Math.round(performance.now() - t);
+    S.pingH.push(l);
+    if (S.pingH.length > 10) S.pingH.shift();
+    const avg = Math.round(S.pingH.reduce((a, b) => a + b, 0) / S.pingH.length);
+    st('latBdg', avg + 'ms');
+    const cv = $('pingChart'); if (!cv) return;
+    if (!S.pc) {
+      S.pc = new Chart(cv, { type: 'line', data: { labels: S.pingH.map((_, i) => i), datasets: [{ data: S.pingH, borderColor: avg < 80 ? '#30d158' : '#ffd60a', borderWidth: 1.5, pointRadius: 0, fill: false, tension: .3 }] }, options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } } });
+    } else {
+      S.pc.data.labels = S.pingH.map((_, i) => i);
+      S.pc.data.datasets[0].data = S.pingH;
+      S.pc.update('none');
+    }
+  } catch (e) {}
+}
+
+// ══════════════════════════════════════════════
+// WEBSOCKET
+// ══════════════════════════════════════════════
+function startWS() {
+  try {
+    const ws = new WebSocket('wss://stream.binance.com:9443/stream?streams=btcusdt@aggTrade/btcusdt@depth20@100ms');
+    ws.onopen = () => { S.wsOk = true; setStLine('st-ws', true, 'WebSocket live ✓'); };
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if (!msg.stream) return;
+      if (msg.stream.includes('aggTrade')) {
+        const d = msg.data, p = parseFloat(d.p), q = parseFloat(d.q), m = !!d.m;
+        S.prev = S.price; S.price = p;
+        const { winTs } = getPmWindow();
+        if (winTs !== S.lastWinTs) { S.winOpenPrice = p; S.lastWinTs = winTs; }
+        S.wsTrades.unshift({ p, q, m, T: d.T });
+        S.wsTrades = S.wsTrades.filter(t => t.T > Date.now() - 300000);
+        if (S.wsTrades.length > 500) S.wsTrades.length = 500;
+        if (!S.sigThrottle) { S.sigThrottle = true; setTimeout(() => { S.sigThrottle = false; renderAll(); }, 1000); }
+      } else if (msg.stream.includes('depth20')) {
+        S.ob = { bids: msg.data.bids, asks: msg.data.asks };
+      }
+    };
+    ws.onclose = () => { S.wsOk = false; setStLine('st-ws', false, 'WS odpojeno — reconnect...'); setTimeout(startWS, 3000); };
+    ws.onerror = () => ws.close();
+    S.ws = ws;
+  } catch (e) { setStLine('st-ws', false, 'WS nelze připojit'); }
+}
+
+// ══════════════════════════════════════════════
+// REST FETCH
+// ══════════════════════════════════════════════
+async function fetchData() {
+  try {
+    const [kl, tk, ob, tr] = await Promise.all([
+      apiFetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=' + S.tf + '&limit=60'),
+      apiFetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT'),
+      apiFetch('https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=15'),
+      apiFetch('https://api.binance.com/api/v3/trades?symbol=BTCUSDT&limit=100'),
+    ]);
+    S.klines = kl; S.ticker = tk;
+    if (!S.wsOk) { S.ob = ob; S.prev = S.price; S.price = parseFloat(tk.lastPrice); }
+    if (S.wsTrades.length < 10) {
+      S.trades = tr.map(t => ({ p: t.price, q: t.qty, m: t.isBuyerMaker, T: t.time }));
+      if (!S.winOpenPrice && S.trades.length) S.winOpenPrice = parseFloat(S.trades[S.trades.length - 1].p);
+    }
+    setStLine('st-binance', true, 'Binance REST ✓');
+  } catch (e) {
+    setStLine('st-binance', false, 'Binance REST chyba: ' + e.message);
+    showStatus('Chyba Binance: ' + e.message);
+  }
+  // Funding
+  try {
+    const [pr, oi] = await Promise.all([
+      apiFetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT'),
+      apiFetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT'),
+    ]);
+    S.fund = { r: parseFloat(pr.lastFundingRate) * 100, oi: parseFloat(oi.openInterest), mark: parseFloat(pr.markPrice), next: parseInt(pr.nextFundingTime) };
+    setStLine('st-funding', true, 'Funding Rate ✓');
+  } catch (e) { setStLine('st-funding', null, 'Funding nedostupný'); }
+}
+
+// ══════════════════════════════════════════════
+// TIMERS
+// ══════════════════════════════════════════════
+function startCountdown() {
+  clearInterval(S.cdTimer); S.cd = 15;
+  S.cdTimer = setInterval(() => {
+    S.cd--;
+    st('cdt', S.cd + 's');
+    if (S.cd <= 0) { doRefresh(); S.cd = 15; }
+  }, 1000);
+}
+
+// PM loop — každou sekundu countdown + refresh PM každých 30s
+function startPmLoop() {
+  setInterval(async () => {
+    renderPolymarket();
+    const { winTs } = getPmWindow();
+    if (Date.now() - S.pmLastFetch > 30000 || winTs !== S.pm.winTs) {
+      S.pmLastFetch = Date.now();
+      await fetchPolymarket();
+    }
+  }, 1000);
+}
+
+async function doRefresh() {
+  await fetchData();
+  await fetchPolymarket();
+  renderAll();
+  drawChart();
+}
+
+function setTf(tf, btn) {
+  document.querySelectorAll('.tfb').forEach(b => b.className = 'tfb');
+  btn.className = 'tfb on';
+  S.tf = tf;
+  doRefresh();
+}
+
+setInterval(() => st('botTime', tsMs()), 500);
+setInterval(doPing, 15000);
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+(async () => {
+  startWS();
+  await doRefresh();
+  showStatus('Připojeno! Binance + Polymarket načteny.');
+  setTimeout(() => { const o = $('statusOverlay'); if (o) o.classList.remove('show'); }, 3000);
+  startCountdown();
+  startPmLoop();
+  doPing();
+})();
+</script>
+</body>
+</html>
